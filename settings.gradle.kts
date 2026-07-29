@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "zidonghua"
 include(":app")
-include(":opencv")
