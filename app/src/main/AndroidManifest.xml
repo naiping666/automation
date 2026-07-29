@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ====== 读取已安装应用列表权限 ====== -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- ====== 悬浮窗权限 ====== -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ====== 前台服务权限（Android 14+ 必须） ====== -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- ====== 声明包可见性 ====== -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Zidonghua">
+
+        <!-- 主界面 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 坐标捕获透明层 -->
+        <activity
+            android:name=".CoordinateCaptureActivity"
+            android:theme="@style/Theme.Transparent"
+            android:exported="false" />
+
+        <!-- 无障碍模式界面 -->
+        <activity
+            android:name=".AccessibilityModeActivity"
+            android:exported="false" />
+
+        <!-- Root 模式界面 -->
+        <activity
+            android:name=".RootModeActivity"
+            android:exported="false" />
+
+        <!-- 脚本编辑器 -->
+        <activity
+            android:name=".ScriptEditorActivity"
+            android:exported="false" />
+
+        <!-- ====== 坐标捕获悬浮窗服务 ====== -->
+        <service
+            android:name=".CoordinateFloatingService"
+            android:exported="false" />
+
+        <!-- ====== 全屏捕获服务 ====== -->
+        <service
+            android:name=".FullScreenCaptureService"
+            android:exported="false" />
+
+        <!-- ====== 屏幕截图前台服务（新增） ====== -->
+        <service
+            android:name=".ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- 无障碍服务 -->
+        <service
+            android:name=".MyAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+
+</manifest>
