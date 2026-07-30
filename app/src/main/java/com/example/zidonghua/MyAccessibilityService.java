@@ -44,7 +44,7 @@ public class MyAccessibilityService extends AccessibilityService {
         return isConnected && instance != null;
     }
 
-    // ========== 点击 ==========
+    // ---------- 点击 ----------
     public static void performClick(int x, int y) throws Exception {
         if (!isServiceRunning()) throw new Exception("无障碍服务未运行");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -58,7 +58,7 @@ public class MyAccessibilityService extends AccessibilityService {
         }
     }
 
-    // ========== 长按 ==========
+    // ---------- 长按 ----------
     public static void performLongClick(int x, int y, int durationMs) throws Exception {
         if (!isServiceRunning()) throw new Exception("无障碍服务未运行");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -72,7 +72,7 @@ public class MyAccessibilityService extends AccessibilityService {
         }
     }
 
-    // ========== 滑动 ==========
+    // ---------- 滑动 ----------
     public static void performSwipe(int startX, int startY, int endX, int endY) throws Exception {
         if (!isServiceRunning()) throw new Exception("无障碍服务未运行");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -87,45 +87,43 @@ public class MyAccessibilityService extends AccessibilityService {
         }
     }
 
-    // ========== 全局动作 ==========
+    // ---------- 全局动作 ----------
     public static void doGlobalAction(int action) throws Exception {
         if (!isServiceRunning()) throw new Exception("无障碍服务未运行");
         instance.performGlobalAction(action);
     }
 
-    // ========== 文本输入 ==========
+    // ---------- 文本输入 ----------
     public static void inputText(String text) throws Exception {
         if (!isServiceRunning()) throw new Exception("无障碍服务未运行");
         if (text == null) throw new Exception("输入文本不能为空");
 
-        Log.d("MyAccessibility", "🚀 inputText 开始，目标文字: " + text);
+        Log.d("MyAccessibility", "inputText 开始，目标文字: " + text);
 
         AccessibilityNodeInfo target = null;
 
         // 1. 先尝试获取当前焦点节点
         target = instance.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        Log.d("MyAccessibility", "🔍 findFocus 结果: " + (target != null ? "找到节点，className=" + target.getClassName() : "null"));
+        Log.d("MyAccessibility", "findFocus 结果: " + (target != null ? "找到节点，className=" + target.getClassName() : ""));
 
         // 2. 如果焦点节点无效，则从根节点查找
         if (target == null || target.getClassName() == null || !target.isEditable()) {
             if (target != null) {
-                Log.d("MyAccessibility", "♻️ 回收无效焦点节点");
+                Log.d("MyAccessibility", "回收无效焦点节点");
                 target.recycle();
                 target = null;
             }
-            Log.d("MyAccessibility", "🔍 尝试获取根节点...");
+            Log.d("MyAccessibility", "尝试获取根节点...");
             AccessibilityNodeInfo root = instance.getRootInActiveWindow();
-            Log.d("MyAccessibility", "🔍 root 结果: " + (root != null ? "获取成功" : "null (可能当前窗口无焦点或权限不足)"));
+            Log.d("MyAccessibility", "root 结果: " + (root != null ? "获取成功" : " (可能当前窗口无焦点或权限不足)"));
             if (root != null) {
-                // 🔥 调试：打印节点树信息（只打印前2层）
+                // 打印节点树信息（调试用，只打印前2层）
                 debugNodeTree(root, 0);
                 // 查找真正的输入框
                 target = findRealInputNode(root);
                 root.recycle();
             } else {
-                // 如果 root 为 null，尝试通过获取当前活跃窗口的包名来诊断
-                String packageName = instance.getRootInActiveWindow() == null ? "null" : "not null"; // 这里其实重复了，但为了保险
-                Log.e("MyAccessibility", "❌ 无法获取根节点，请确保无障碍服务已开启且当前应用有可访问节点");
+                Log.e("MyAccessibility", "无法获取根节点，请确保无障碍服务已开启且当前应用有可访问节点");
             }
         }
 
@@ -133,7 +131,7 @@ public class MyAccessibilityService extends AccessibilityService {
             throw new Exception("未找到输入框，请确保已点击输入框使其获得焦点");
         }
 
-        Log.d("MyAccessibility", "✅ 最终目标节点: className=" + target.getClassName()
+        Log.d("MyAccessibility", "最终目标节点: className=" + target.getClassName()
                 + ", isFocused=" + target.isFocused()
                 + ", isEditable=" + target.isEditable());
 
@@ -148,15 +146,15 @@ public class MyAccessibilityService extends AccessibilityService {
             boolean success = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
             if (success) {
                 target.recycle();
-                Log.d("MyAccessibility", "✅ SET_TEXT 成功");
+                Log.d("MyAccessibility", "SET_TEXT 成功");
                 return;
             } else {
-                Log.w("MyAccessibility", "⚠️ SET_TEXT 失败，尝试粘贴");
+                Log.w("MyAccessibility", "SET_TEXT 失败，尝试粘贴");
             }
         }
 
         // 降级：粘贴
-        Log.d("MyAccessibility", "🔄 使用剪贴板粘贴方式");
+        Log.d("MyAccessibility", "使用剪贴板粘贴方式");
         if (!target.isFocused()) {
             boolean focused = target.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
             if (!focused) {
@@ -181,7 +179,7 @@ public class MyAccessibilityService extends AccessibilityService {
         ClipboardManager clipboard = (ClipboardManager) instance.getSystemService(Context.CLIPBOARD_SERVICE);
         android.content.ClipData clip = android.content.ClipData.newPlainText("script_text", text);
         clipboard.setPrimaryClip(clip);
-        Log.d("MyAccessibility", "📋 已复制到剪贴板");
+        Log.d("MyAccessibility", "已复制到剪贴板");
 
         boolean pasted = target.performAction(AccessibilityNodeInfo.ACTION_PASTE);
         if (!pasted) {
@@ -198,10 +196,10 @@ public class MyAccessibilityService extends AccessibilityService {
         if (!pasted) {
             throw new Exception("粘贴失败，输入框可能不支持粘贴操作");
         }
-        Log.d("MyAccessibility", "✅ 粘贴成功");
+        Log.d("MyAccessibility", "粘贴成功");
     }
 
-    // ========== 🔥 新增：调试打印节点树（只打印前3层） ==========
+    // ---------- 调试：按层级打印节点树（最多3层） ----------
     private static void debugNodeTree(AccessibilityNodeInfo node, int depth) {
         if (node == null || depth > 3) return;
         CharSequence className = node.getClassName();
@@ -220,14 +218,13 @@ public class MyAccessibilityService extends AccessibilityService {
         }
     }
 
-    // ========== 🔥 新增：查找真正的输入节点（宽松匹配） ==========
+    // ---------- 查找真正的输入节点（宽松匹配） ----------
     private static AccessibilityNodeInfo findRealInputNode(AccessibilityNodeInfo root) {
         if (root == null) return null;
         Queue<AccessibilityNodeInfo> queue = new LinkedList<>();
         queue.add(root);
         while (!queue.isEmpty()) {
             AccessibilityNodeInfo node = queue.poll();
-            // 条件：可编辑 或 类名包含 "edit" 或 可聚焦且类名包含 "input"
             CharSequence className = node.getClassName();
             boolean isEdit = className != null && className.toString().toLowerCase().contains("edit");
             boolean isInput = className != null && className.toString().toLowerCase().contains("input");

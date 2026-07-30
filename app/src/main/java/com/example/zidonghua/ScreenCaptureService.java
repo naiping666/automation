@@ -19,12 +19,18 @@ public class ScreenCaptureService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForeground(NOTIFICATION_ID, createNotification());
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // 服务启动后保持运行
+        // 延迟调用 startForeground() 以避免 Android 14+ 时序问题
+        // 权限已在启动服务前由调用方检查
+        try {
+            startForeground(NOTIFICATION_ID, createNotification());
+        } catch (SecurityException e) {
+            // 权限不足时不作为前台服务运行，降级为后台
+            android.util.Log.e("ScreenCaptureService", "前台服务权限不足", e);
+        }
         return START_STICKY;
     }
 

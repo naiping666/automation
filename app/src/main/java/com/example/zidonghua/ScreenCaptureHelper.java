@@ -30,18 +30,18 @@ public class ScreenCaptureHelper {
             }
             mediaProjection = projection;
 
-            // 创建后台线程和 Handler（必须先于注册回调）
+            // 创建后台线程和 Handler
             backgroundThread = new HandlerThread("ScreenCapture");
             backgroundThread.start();
             backgroundHandler = new Handler(backgroundThread.getLooper());
 
-            // ===== 注册 MediaProjection 回调（必须） =====
+            // 注册 MediaProjection 回调
             if (mediaProjection != null) {
                 mediaProjection.registerCallback(new MediaProjection.Callback() {
                     @Override
                     public void onStop() {
                         Log.d(TAG, "MediaProjection stopped by system, cleaning up...");
-                        cleanup(); // 注意：cleanup 内有同步锁，安全
+                        cleanup();
                     }
                 }, backgroundHandler);
             }
@@ -49,11 +49,11 @@ public class ScreenCaptureHelper {
             imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
             initialized = true;
             Log.d(TAG, "ScreenCaptureHelper initialized, width=" + width + ", height=" + height);
-            Log.d(TAG, "MediaProjection 对象: " + (mediaProjection != null ? "有效" : "null"));
+            Log.d(TAG, "MediaProjection 对象: " + (mediaProjection != null ? "有效" : ""));
         }
     }
 
-    // ✅ 修改：声明抛出 SecurityException
+    // 修改为抛出 SecurityException，便于调用层捕获权限失效
     public static Bitmap captureScreen() throws SecurityException {
         if (!initialized || mediaProjection == null || imageReader == null) {
             Log.e(TAG, "ScreenCaptureHelper not initialized");
@@ -137,8 +137,10 @@ public class ScreenCaptureHelper {
             return bitmap;
 
         } catch (SecurityException e) {
-            // 截图权限失效，清理资源并重新抛出异常
+            // 截图权限失效，先释放 VirtualDisplay 再清理全局资源
             Log.e(TAG, "截图权限失效: " + e.getMessage(), e);
+            if (image != null) image.close();
+            if (virtualDisplay != null) virtualDisplay.release();
             cleanup();
             throw e;
         } catch (Exception e) {
@@ -152,7 +154,6 @@ public class ScreenCaptureHelper {
     public static void cleanup() {
         synchronized (lock) {
             if (mediaProjection != null) {
-                // 只需要 stop() 即可，系统会自动清理回调
                 mediaProjection.stop();
                 mediaProjection = null;
             }

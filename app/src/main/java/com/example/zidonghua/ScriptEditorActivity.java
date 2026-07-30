@@ -71,7 +71,8 @@ public class ScriptEditorActivity extends AppCompatActivity {
     private static final int REQUEST_CAPTURE_LONG_CLICK = 1002;
     private static final int REQUEST_PICK_IMAGE = 1003;
     private static final int REQUEST_SCREEN_CAPTURE = 1004;
-    private int currentStepIndex = 0; // 记录当前执行的步骤，用于断点续传
+    private int currentStepIndex = 0;
+
     // ========== 图像识别临时变量 ==========
     private String selectedImagePath;
 
@@ -167,7 +168,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
             }
         });
 
-        // ✅ 设置 IF 步骤的监听器
+        // 设置 IF 步骤的监听器
         adapter.setIfStepListener(new ScriptStepAdapter.OnIfStepListener() {
             @Override
             public void onIfStepExpandToggle(int position) {
@@ -277,7 +278,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 steps.clear();
                 steps.addAll(scriptManager.loadScript(scriptName));
                 adapter.notifyDataSetChanged();
-                setTitle("📜 " + scriptName);
+                setTitle(scriptName);
                 Toast.makeText(this, "已加载: " + scriptName, Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
                 Toast.makeText(this, "加载失败", Toast.LENGTH_SHORT).show();
@@ -309,12 +310,14 @@ public class ScriptEditorActivity extends AppCompatActivity {
                                 Toast.makeText(this, "截图权限已获取", Toast.LENGTH_SHORT).show();
                                 Log.d("ScriptEditor", "MediaProjection 重新初始化成功");
 
-                                // ✅ 修改：重置运行状态，然后重新执行脚本
-                                if (!steps.isEmpty()) {
-                                    isRunning = false;          // 关键：重置运行状态
-                                    currentStepIndex = 0;       // 重置断点，从头开始
-                                    runScript();                // 重新执行 runScript，它会检查权限并执行脚本
-                                } else {
+                                // 断点续传：从 currentStepIndex 继续执行，而不是从头开始
+                                if (currentStepIndex < steps.size() && isRunning) {
+                                    // 已有执行中的断点，从断点继续
+                                    executeStep(currentStepIndex);
+                                } else if (!steps.isEmpty()) {
+                                    // 无断点或已结束，从头开始
+                                    isRunning = false;
+                                    currentStepIndex = 0;
                                     runScript();
                                 }
                             } else {
@@ -398,7 +401,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         startActivityForResult(intent, REQUEST_SCREEN_CAPTURE);
     }
 
-    // ========== ✅ 等待截图服务初始化完成 ==========
+    // ========== 等待截图服务初始化完成 ==========
     private void waitForScreenCaptureInit() {
         new Thread(() -> {
             int waitCount = 0;
@@ -437,7 +440,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
                     + (steps.get(i).type == ScriptStep.TYPE_LAUNCH_APP ? " pkg=" + steps.get(i).packageName : ""));
         }
 
-        // ====== 递归检查是否需要无障碍服务 ======
+        // 递归检查是否需要无障碍服务
         boolean needAccessibility = checkNeedAccessibility(steps);
         Log.d("ScriptEditor", "needAccessibility = " + needAccessibility);
         Log.d("ScriptEditor", "MyAccessibilityService.isServiceRunning() = " + MyAccessibilityService.isServiceRunning());
@@ -448,27 +451,22 @@ public class ScriptEditorActivity extends AppCompatActivity {
             return;
         }
 
-        // ====== 递归检查是否需要截图权限 ======
+        // 递归检查是否需要截图权限
         boolean needScreenCapture = checkNeedScreenCapture(steps);
 
         if (needScreenCapture) {
             if (ScreenCaptureHelper.isInitialized()) {
                 Log.d("ScriptEditor", "截图服务已就绪，直接执行脚本");
             } else {
-                if (mediaProjection != null) {
-                    // ... 尝试重新初始化
-                }
-                if (!ScreenCaptureHelper.isInitialized()) {
-                    new AlertDialog.Builder(this)
-                            .setTitle("需要截图权限")
-                            .setMessage("文字识别功能需要获取屏幕截图权限，点击「确定」后系统会弹出授权窗口。")
-                            .setPositiveButton("确定", (dialog, which) -> {
-                                requestScreenCapturePermission();
-                            })
-                            .setNegativeButton("取消", null)
-                            .show();
-                    return;
-                }
+                new AlertDialog.Builder(this)
+                        .setTitle("需要截图权限")
+                        .setMessage("文字识别功能需要获取屏幕截图权限，点击确定后系统会弹出授权窗口。")
+                        .setPositiveButton("确定", (dialog, which) -> {
+                            requestScreenCapturePermission();
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+                return;
             }
         }
 
@@ -478,7 +476,6 @@ public class ScriptEditorActivity extends AppCompatActivity {
     }
     private boolean checkNeedScreenCapture(List<ScriptStep> steps) {
         for (ScriptStep step : steps) {
-            // ✅ TYPE_IF 本身需要截图权限（条件判断需要 OCR）
             if (step.type == ScriptStep.TYPE_IF || step.type == ScriptStep.TYPE_IMAGE_CLICK) {
                 return true;
             }
@@ -527,37 +524,37 @@ public class ScriptEditorActivity extends AppCompatActivity {
             try {
                 switch (step.type) {
                     case ScriptStep.TYPE_LAUNCH_APP:
-                        Log.d("ScriptEditor", "▶️ 执行启动应用: " + step.packageName);
+                        Log.d("ScriptEditor", "执行启动应用: " + step.packageName);
                         launchApp(step.packageName);
-                        Log.d("ScriptEditor", "✅ 启动应用调用完成");
+                        Log.d("ScriptEditor", "启动应用调用完成");
                         break;
 
                     case ScriptStep.TYPE_WAIT:
-                        Log.d("ScriptEditor", "⏳ 执行等待: " + step.waitMs + "ms");
+                        Log.d("ScriptEditor", "执行等待: " + step.waitMs + "ms");
                         Thread.sleep(step.waitMs);
-                        Log.d("ScriptEditor", "✅ 等待完成");
+                        Log.d("ScriptEditor", "等待完成");
                         break;
 
                     case ScriptStep.TYPE_CLICK:
-                        Log.d("ScriptEditor", "🖱️ 执行点击: (" + step.x + "," + step.y + ")");
+                        Log.d("ScriptEditor", "执行点击: (" + step.x + "," + step.y + ")");
                         MyAccessibilityService.performClick(step.x, step.y);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_SWIPE:
-                        Log.d("ScriptEditor", "👆 执行滑动: (" + step.x1 + "," + step.y1 + ") -> (" + step.x2 + "," + step.y2 + ")");
+                        Log.d("ScriptEditor", "执行滑动: (" + step.x1 + "," + step.y1 + ") -> (" + step.x2 + "," + step.y2 + ")");
                         MyAccessibilityService.performSwipe(step.x1, step.y1, step.x2, step.y2);
                         Thread.sleep(300);
                         break;
 
                     case ScriptStep.TYPE_TEXT:
-                        Log.d("ScriptEditor", "⌨️ 执行文本输入: " + step.text);
+                        Log.d("ScriptEditor", "执行文本输入: " + step.text);
                         try {
                             MyAccessibilityService.inputText(step.text);
                             Thread.sleep(200);
-                            Log.d("ScriptEditor", "✅ 文本输入成功");
+                            Log.d("ScriptEditor", "文本输入成功");
                         } catch (Exception e) {
-                            Log.e("ScriptEditor", "❌ 文本输入失败", e);
+                            Log.e("ScriptEditor", "文本输入失败", e);
                             runOnUiThread(() -> {
                                 Toast.makeText(ScriptEditorActivity.this, "文本输入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
                                 isRunning = false;
@@ -567,30 +564,30 @@ public class ScriptEditorActivity extends AppCompatActivity {
                         break;
 
                     case ScriptStep.TYPE_LONG_CLICK:
-                        Log.d("ScriptEditor", "🖱️ 执行长按: (" + step.x + "," + step.y + ") 持续 " + step.longClickDuration + "ms");
+                        Log.d("ScriptEditor", "执行长按: (" + step.x + "," + step.y + ") 持续 " + step.longClickDuration + "ms");
                         MyAccessibilityService.performLongClick(step.x, step.y, step.longClickDuration);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_BACK:
-                        Log.d("ScriptEditor", "◀️ 执行返回键");
+                        Log.d("ScriptEditor", "执行返回键");
                         MyAccessibilityService.doGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_HOME:
-                        Log.d("ScriptEditor", "🏠 执行 Home 键");
+                        Log.d("ScriptEditor", "执行 Home 键");
                         MyAccessibilityService.doGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_IMAGE_CLICK:
-                        // 原有的截图识别逻辑（不变，但注意内部的异常处理已存在）
+                        Bitmap screen = null;
                         try {
                             if (!ScreenCaptureHelper.isInitialized()) {
                                 throw new Exception("截图服务未初始化，请重新授权");
                             }
-                            Bitmap screen = ScreenCaptureHelper.captureScreen();
+                            screen = ScreenCaptureHelper.captureScreen();
                             if (screen == null) {
                                 throw new Exception("截图失败，请重试");
                             }
@@ -603,6 +600,10 @@ public class ScriptEditorActivity extends AppCompatActivity {
                                 boolean found = false;
                                 for (int retry = 0; retry < 3; retry++) {
                                     Thread.sleep(step.timeoutMs / 3);
+                                    if (screen != null && !screen.isRecycled()) {
+                                        screen.recycle();
+                                        screen = null;
+                                    }
                                     screen = ScreenCaptureHelper.captureScreen();
                                     if (screen == null) continue;
                                     clickPoint = performOCRAndFindText(screen, targetText);
@@ -612,36 +613,67 @@ public class ScriptEditorActivity extends AppCompatActivity {
                                     }
                                 }
                                 if (!found) {
-                                    throw new Exception("未找到文字: " + targetText);
+                                    final String errorMsg = "未找到对应文字: " + targetText;
+                                    runOnUiThread(() -> {
+                                        if (isFinishing() || isDestroyed()) return;
+                                        isRunning = false;
+                                        new AlertDialog.Builder(ScriptEditorActivity.this)
+                                                .setTitle("提示")
+                                                .setMessage(errorMsg)
+                                                .setPositiveButton("确定", null)
+                                                .setCancelable(false)
+                                                .show();
+                                    });
+                                    if (screen != null && !screen.isRecycled()) {
+                                        screen.recycle();
+                                    }
+                                    return;
                                 }
                             }
                             MyAccessibilityService.performClick((int) clickPoint.x, (int) clickPoint.y);
                             Thread.sleep(200);
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                         } catch (SecurityException e) {
-                            // 截图权限失效
                             currentStepIndex = index;
+                            Log.e("ScriptEditor", "截图权限异常，停止执行", e);
                             runOnUiThread(() -> {
-                                Toast.makeText(ScriptEditorActivity.this, "截图权限已失效，请重新授权", Toast.LENGTH_SHORT).show();
-                                ScreenCaptureHelper.cleanup();
-                                mediaProjection = null;
+                                if (isFinishing() || isDestroyed()) return;
                                 isRunning = false;
-                                requestScreenCapturePermission();
+                                new AlertDialog.Builder(ScriptEditorActivity.this)
+                                        .setTitle("错误")
+                                        .setMessage("截图权限异常，脚本已停止\n\n请重新授权截图权限后重试。")
+                                        .setPositiveButton("确定", null)
+                                        .setCancelable(false)
+                                        .show();
                             });
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                             return;
                         } catch (Exception e) {
                             e.printStackTrace();
                             Log.e("ScriptEditor", "执行步骤出错 (index=" + index + ")", e);
                             runOnUiThread(() -> {
-                                Toast.makeText(ScriptEditorActivity.this, "执行出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                if (isFinishing() || isDestroyed()) return;
                                 isRunning = false;
+                                new AlertDialog.Builder(ScriptEditorActivity.this)
+                                        .setTitle("错误")
+                                        .setMessage("执行出错: " + e.getMessage())
+                                        .setPositiveButton("确定", null)
+                                        .setCancelable(false)
+                                        .show();
                             });
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                             return;
                         }
                         break;
 
-                    // ====== 条件分支（不变） ======
                     case ScriptStep.TYPE_IF:
-                        Log.d("ScriptEditor", "🔍 执行 IF 步骤，条件文字: " + step.conditionText);
+                        Log.d("ScriptEditor", "执行 IF 步骤，条件文字: " + step.conditionText);
                         try {
                             if (!ScreenCaptureHelper.isInitialized()) {
                                 throw new Exception("截图服务未初始化，请重新授权");
@@ -655,16 +687,13 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
                             List<ScriptStep> targetSubSteps = conditionMet ? step.thenSteps : step.elseSteps;
                             if (targetSubSteps != null && !targetSubSteps.isEmpty()) {
-                                // 异步执行子步骤，完成后继续下一步
                                 executeSubSteps(targetSubSteps, () -> {
                                     Log.d("ScriptEditor", "IF 子步骤执行完毕，继续下一步");
                                     runOnUiThread(() -> executeStep(index + 1));
                                 });
-                                // 子步骤异步执行，当前线程直接返回，由回调驱动后续流程
                                 return;
                             } else {
                                 Log.d("ScriptEditor", "IF 没有子步骤，直接继续");
-                                // 没有子步骤，直接继续下一步
                                 runOnUiThread(() -> executeStep(index + 1));
                             }
                         } catch (Exception e) {
@@ -675,14 +704,13 @@ public class ScriptEditorActivity extends AppCompatActivity {
                             });
                             return;
                         }
-                        break; // 如果前面没有 return，这里 break 防止执行到最后一段
+                        break;
 
                     default:
                         break;
                 }
             } catch (Exception e) {
                 Log.e("ScriptEditor", "执行步骤出错 (index=" + index + ")", e);
-                // 其他未捕获的异常（如无障碍服务未运行等）
                 e.printStackTrace();
                 runOnUiThread(() -> {
                     Toast.makeText(ScriptEditorActivity.this, "执行出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -691,12 +719,12 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 return;
             }
 
-            // 非 IF 步骤才继续下一步（IF 步骤内部自己控制）
             if (step.type != ScriptStep.TYPE_IF) {
                 runOnUiThread(() -> executeStep(index + 1));
             }
         }).start();
     }
+
     // ========== 执行子步骤列表（递归） ==========
     private void executeSubSteps(List<ScriptStep> subSteps, Runnable onComplete) {
         if (subSteps == null || subSteps.isEmpty()) {
@@ -708,7 +736,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
     private void executeSubStepRecursive(List<ScriptStep> subSteps, int index, Runnable onComplete) {
         if (!isRunning || index >= subSteps.size()) {
-            Log.d("ScriptEditor", "🔍 executeSubStepRecursive: 子步骤总数=" + subSteps.size() + ", 当前索引=" + index);
+            Log.d("ScriptEditor", "executeSubStepRecursive: 子步骤总数=" + subSteps.size() + ", 当前索引=" + index);
             if (onComplete != null) onComplete.run();
             return;
         }
@@ -718,49 +746,49 @@ public class ScriptEditorActivity extends AppCompatActivity {
             try {
                 switch (step.type) {
                     case ScriptStep.TYPE_LAUNCH_APP:
-                        Log.d("ScriptEditor", "▶️ 执行启动应用: " + step.packageName);
+                        Log.d("ScriptEditor", "执行启动应用: " + step.packageName);
                         launchApp(step.packageName);
-                        Log.d("ScriptEditor", "✅ 启动应用调用完成");
+                        Log.d("ScriptEditor", "启动应用调用完成");
                         break;
 
                     case ScriptStep.TYPE_WAIT:
-                        Log.d("ScriptEditor", "⏳ 执行等待: " + step.waitMs + "ms");
+                        Log.d("ScriptEditor", "执行等待: " + step.waitMs + "ms");
                         Thread.sleep(step.waitMs);
-                        Log.d("ScriptEditor", "✅ 等待完成");
+                        Log.d("ScriptEditor", "等待完成");
                         break;
 
                     case ScriptStep.TYPE_CLICK:
-                        Log.d("ScriptEditor", "🖱️ 执行点击: (" + step.x + "," + step.y + ")");
+                        Log.d("ScriptEditor", "执行点击: (" + step.x + "," + step.y + ")");
                         MyAccessibilityService.performClick(step.x, step.y);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_SWIPE:
-                        Log.d("ScriptEditor", "👆 执行滑动: (" + step.x1 + "," + step.y1 + ") -> (" + step.x2 + "," + step.y2 + ")");
+                        Log.d("ScriptEditor", "执行滑动: (" + step.x1 + "," + step.y1 + ") -> (" + step.x2 + "," + step.y2 + ")");
                         MyAccessibilityService.performSwipe(step.x1, step.y1, step.x2, step.y2);
                         Thread.sleep(300);
                         break;
 
                     case ScriptStep.TYPE_BACK:
-                        Log.d("ScriptEditor", "◀️ 执行返回键");
+                        Log.d("ScriptEditor", "执行返回键");
                         MyAccessibilityService.doGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_HOME:
-                        Log.d("ScriptEditor", "🏠 执行 Home 键");
+                        Log.d("ScriptEditor", "执行 Home 键");
                         MyAccessibilityService.doGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_TEXT:
-                        Log.d("ScriptEditor", "⌨️ 执行文本输入: " + step.text);
+                        Log.d("ScriptEditor", "执行文本输入: " + step.text);
                         try {
                             MyAccessibilityService.inputText(step.text);
                             Thread.sleep(200);
-                            Log.d("ScriptEditor", "✅ 文本输入成功");
+                            Log.d("ScriptEditor", "文本输入成功");
                         } catch (Exception e) {
-                            Log.e("ScriptEditor", "❌ 文本输入失败", e);
+                            Log.e("ScriptEditor", "文本输入失败", e);
                             runOnUiThread(() -> {
                                 Toast.makeText(ScriptEditorActivity.this, "文本输入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
                                 isRunning = false;
@@ -770,18 +798,18 @@ public class ScriptEditorActivity extends AppCompatActivity {
                         break;
 
                     case ScriptStep.TYPE_LONG_CLICK:
-                        Log.d("ScriptEditor", "🖱️ 执行长按: (" + step.x + "," + step.y + ") 持续 " + step.longClickDuration + "ms");
+                        Log.d("ScriptEditor", "执行长按: (" + step.x + "," + step.y + ") 持续 " + step.longClickDuration + "ms");
                         MyAccessibilityService.performLongClick(step.x, step.y, step.longClickDuration);
                         Thread.sleep(200);
                         break;
 
                     case ScriptStep.TYPE_IMAGE_CLICK:
-                        Log.d("ScriptEditor", "📷 执行文字识别点击: " + step.ocrText);
+                        Bitmap screen = null;
                         try {
                             if (!ScreenCaptureHelper.isInitialized()) {
                                 throw new Exception("截图服务未初始化，请重新授权");
                             }
-                            Bitmap screen = ScreenCaptureHelper.captureScreen();
+                            screen = ScreenCaptureHelper.captureScreen();
                             if (screen == null) {
                                 throw new Exception("截图失败，请重试");
                             }
@@ -794,6 +822,10 @@ public class ScriptEditorActivity extends AppCompatActivity {
                                 boolean found = false;
                                 for (int retry = 0; retry < 3; retry++) {
                                     Thread.sleep(step.timeoutMs / 3);
+                                    if (screen != null && !screen.isRecycled()) {
+                                        screen.recycle();
+                                        screen = null;
+                                    }
                                     screen = ScreenCaptureHelper.captureScreen();
                                     if (screen == null) continue;
                                     clickPoint = performOCRAndFindText(screen, targetText);
@@ -803,35 +835,64 @@ public class ScriptEditorActivity extends AppCompatActivity {
                                     }
                                 }
                                 if (!found) {
-                                    throw new Exception("未找到文字: " + targetText);
+                                    final String errorMsg = "未找到对应文字: " + targetText;
+                                    runOnUiThread(() -> {
+                                        isRunning = false;
+                                        new AlertDialog.Builder(ScriptEditorActivity.this)
+                                                .setTitle("提示")
+                                                .setMessage(errorMsg)
+                                                .setPositiveButton("确定", null)
+                                                .setCancelable(false)
+                                                .show();
+                                    });
+                                    if (screen != null && !screen.isRecycled()) {
+                                        screen.recycle();
+                                    }
+                                    return;
                                 }
                             }
                             MyAccessibilityService.performClick((int) clickPoint.x, (int) clickPoint.y);
                             Thread.sleep(200);
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                         } catch (SecurityException e) {
-                            Log.e("ScriptEditor", "截图权限失效", e);
                             currentStepIndex = index;
+                            Log.e("ScriptEditor", "截图权限异常，停止执行", e);
                             runOnUiThread(() -> {
-                                Toast.makeText(ScriptEditorActivity.this, "截图权限已失效，请重新授权", Toast.LENGTH_SHORT).show();
-                                ScreenCaptureHelper.cleanup();
-                                mediaProjection = null;
                                 isRunning = false;
-                                requestScreenCapturePermission();
+                                new AlertDialog.Builder(ScriptEditorActivity.this)
+                                        .setTitle("错误")
+                                        .setMessage("截图权限异常，脚本已停止\n\n请重新授权截图权限后重试。")
+                                        .setPositiveButton("确定", null)
+                                        .setCancelable(false)
+                                        .show();
                             });
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                             return;
                         } catch (Exception e) {
-                            Log.e("ScriptEditor", "执行步骤出错 (index=" + index + ")", e);
                             e.printStackTrace();
+                            Log.e("ScriptEditor", "执行步骤出错 (index=" + index + ")", e);
                             runOnUiThread(() -> {
-                                Toast.makeText(ScriptEditorActivity.this, "执行出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                                 isRunning = false;
+                                new AlertDialog.Builder(ScriptEditorActivity.this)
+                                        .setTitle("错误")
+                                        .setMessage("执行出错: " + e.getMessage())
+                                        .setPositiveButton("确定", null)
+                                        .setCancelable(false)
+                                        .show();
                             });
+                            if (screen != null && !screen.isRecycled()) {
+                                screen.recycle();
+                            }
                             return;
                         }
                         break;
 
                     case ScriptStep.TYPE_IF:
-                        Log.d("ScriptEditor", "🔍 执行 IF 步骤，条件文字: " + step.conditionText);
+                        Log.d("ScriptEditor", "执行 IF 步骤，条件文字: " + step.conditionText);
                         try {
                             if (!ScreenCaptureHelper.isInitialized()) {
                                 throw new Exception("截图服务未初始化，请重新授权");
@@ -845,17 +906,14 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
                             List<ScriptStep> targetSubSteps = conditionMet ? step.thenSteps : step.elseSteps;
                             if (targetSubSteps != null && !targetSubSteps.isEmpty()) {
-                                // 异步执行子步骤，完成后继续下一步
                                 executeSubSteps(targetSubSteps, () -> {
                                     Log.d("ScriptEditor", "IF 子步骤执行完毕，继续下一步");
-                                    runOnUiThread(() -> executeStep(index + 1));
+                                    runOnUiThread(() -> executeSubStepRecursive(subSteps, index + 1, onComplete));
                                 });
-                                // 子步骤异步执行，当前线程直接返回，由回调驱动后续流程
                                 return;
                             } else {
                                 Log.d("ScriptEditor", "IF 没有子步骤，直接继续");
-                                // 没有子步骤，直接继续下一步
-                                runOnUiThread(() -> executeStep(index + 1));
+                                runOnUiThread(() -> executeSubStepRecursive(subSteps, index + 1, onComplete));
                             }
                         } catch (Exception e) {
                             Log.e("ScriptEditor", "IF 步骤执行失败", e);
@@ -865,10 +923,10 @@ public class ScriptEditorActivity extends AppCompatActivity {
                             });
                             return;
                         }
-                        break; // 如果前面没有 return，这里 break 防止执行到最后一段
+                        break;
 
                     default:
-                        Log.w("ScriptEditor", "⚠️ 未知步骤类型: " + step.type);
+                        Log.w("ScriptEditor", "未知步骤类型: " + step.type);
                         break;
                 }
             } catch (Exception e) {
@@ -879,17 +937,17 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 });
                 return;
             }
-            // 递归到下一个子步骤
             runOnUiThread(() -> executeSubStepRecursive(subSteps, index + 1, onComplete));
         }).start();
     }
+
     // ========== OCR 条件检查（返回 true/false） ==========
     private boolean performOCRCheck(Bitmap bitmap, String targetText) {
         if (bitmap == null || targetText == null) return false;
         try {
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             final boolean[] result = {false};
-            final Exception[] error = {null};
+            final Exception[] error = new Exception[1];
 
             InputImage image = InputImage.fromBitmap(bitmap, 0);
             TextRecognizer recognizer = TextRecognition.getClient(
@@ -929,41 +987,38 @@ public class ScriptEditorActivity extends AppCompatActivity {
     }
     // ========== OCR 辅助方法 ==========
     private Point performOCRAndFindText(Bitmap bitmap, String targetText) {
-        // ✅ 1. 参数检查
         if (bitmap == null) {
-            Log.e("ScriptEditor", "❌ bitmap 为 null");
+            Log.e("ScriptEditor", "bitmap 为 null");
             return null;
         }
         if (targetText == null || targetText.isEmpty()) {
-            Log.e("ScriptEditor", "❌ targetText 为空");
+            Log.e("ScriptEditor", "targetText 为空");
             return null;
         }
 
-        // ✅ 2. 保存截图到本地（用于调试，让你亲眼看到截了什么图）
+        // 保存截图到本地（用于调试）
         try {
-            // 创建 screenshots 目录
             File dir = new File(getExternalFilesDir(null), "screenshots");
             if (!dir.exists()) {
                 boolean created = dir.mkdirs();
                 Log.d("ScriptEditor", "创建截图目录: " + dir.getAbsolutePath() + ", 成功: " + created);
             }
-            // 保存截图
             String fileName = "ocr_" + System.currentTimeMillis() + ".png";
             File file = new File(dir, fileName);
             FileOutputStream fos = new FileOutputStream(file);
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
             fos.close();
-            Log.d("ScriptEditor", "📸 截图已保存: " + file.getAbsolutePath());
+            Log.d("ScriptEditor", "截图已保存: " + file.getAbsolutePath());
         } catch (Exception e) {
             Log.e("ScriptEditor", "保存截图失败: " + e.getMessage(), e);
         }
 
         try {
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-            final Point[] result = {null};
-            final Exception[] error = {null};
+            final Point[] result = new Point[1];
+            final Exception[] error = new Exception[1];
 
-            Log.d("ScriptEditor", "🔍 开始 OCR 识别，目标文字: [" + targetText + "]");
+            Log.d("ScriptEditor", "开始 OCR 识别，目标文字: [" + targetText + "]");
 
             InputImage image = InputImage.fromBitmap(bitmap, 0);
             TextRecognizer recognizer = TextRecognition.getClient(
@@ -972,7 +1027,6 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
             recognizer.process(image)
                     .addOnSuccessListener(visionText -> {
-                        // ✅ 3. 打印所有识别到的文字
                         StringBuilder allText = new StringBuilder();
                         allText.append("=== OCR 识别结果 ===\n");
                         int lineCount = 0;
@@ -987,49 +1041,43 @@ public class ScriptEditorActivity extends AppCompatActivity {
                         }
 
                         if (lineCount == 0) {
-                            Log.d("ScriptEditor", "⚠️ OCR 未识别到任何文字！请检查截图是否包含文字");
+                            Log.d("ScriptEditor", "OCR 未识别到任何文字");
                         } else {
                             Log.d("ScriptEditor", allText.toString());
                         }
 
-                        // ✅ 4. 去除空格后匹配（提高容错率）
                         String targetClean = targetText.replaceAll("\\s+", "");
-                        Log.d("ScriptEditor", "🎯 目标文字(去除空格): [" + targetClean + "]");
+                        Log.d("ScriptEditor", "目标文字(去除空格): [" + targetClean + "]");
 
                         for (Text.TextBlock block : visionText.getTextBlocks()) {
                             for (Text.Line line : block.getLines()) {
                                 String lineText = line.getText();
                                 String lineClean = lineText.replaceAll("\\s+", "");
 
-                                // ✅ 5. 打印每一步匹配过程
                                 Log.d("ScriptEditor", "比较: [" + lineClean + "] 包含 [" + targetClean + "]? " + lineClean.contains(targetClean));
 
                                 if (lineClean.contains(targetClean)) {
-                                    android.graphics.Point[] corners = line.getCornerPoints();
-                                    if (corners != null && corners.length >= 4) {
-                                        // ✅ 6. 计算中心点
-                                        int centerX = (corners[0].x + corners[2].x) / 2;
-                                        int centerY = (corners[0].y + corners[2].y) / 2;
-                                        result[0] = new Point(centerX, centerY);
-                                        Log.d("ScriptEditor", "✅ 找到目标文字! 坐标: (" + centerX + ", " + centerY + ")");
+                                    Point clickPoint = getLineCenter(line);
+                                    if (clickPoint != null) {
+                                        result[0] = clickPoint;
+                                        Log.d("ScriptEditor", "✅ 找到目标文字! 坐标: (" + clickPoint.x + ", " + clickPoint.y + ")");
                                         latch.countDown();
                                         return;
                                     } else {
-                                        Log.d("ScriptEditor", "⚠️ corners 长度不足: " + (corners != null ? corners.length : "null"));
+                                        Log.w("ScriptEditor", "⚠️ 文字匹配但无法获取坐标，跳过该行");
                                     }
                                 }
                             }
                         }
-                        Log.d("ScriptEditor", "❌ 未找到目标文字: [" + targetText + "]");
+                        Log.d("ScriptEditor", "未找到目标文字: [" + targetText + "]");
                         latch.countDown();
                     })
                     .addOnFailureListener(e -> {
                         error[0] = e;
-                        Log.e("ScriptEditor", "❌ OCR 识别失败", e);
+                        Log.e("ScriptEditor", "OCR 识别失败", e);
                         latch.countDown();
                     });
 
-            // ✅ 7. 等待识别完成（超时 5 秒）
             if (latch.await(5000, java.util.concurrent.TimeUnit.MILLISECONDS)) {
                 if (error[0] != null) {
                     Log.e("ScriptEditor", "OCR 识别失败", error[0]);
@@ -1037,11 +1085,11 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 }
                 return result[0];
             } else {
-                Log.e("ScriptEditor", "⏰ OCR 识别超时 (5秒)");
+                Log.e("ScriptEditor", "OCR 识别超时 (5秒)");
                 return null;
             }
         } catch (Exception e) {
-            Log.e("ScriptEditor", "❌ OCR 异常: " + e.getMessage(), e);
+            Log.e("ScriptEditor", "OCR 异常: " + e.getMessage(), e);
             return null;
         }
     }
@@ -1053,14 +1101,13 @@ public class ScriptEditorActivity extends AppCompatActivity {
             if (intent != null) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
-                Log.d("ScriptEditor", "✅ 启动应用成功 (startActivity 已调用)");
+                Log.d("ScriptEditor", "启动应用成功 (startActivity 已调用)");
             } else {
-                Log.e("ScriptEditor", "❌ 未找到应用: " + packageName);
+                Log.e("ScriptEditor", "未找到应用: " + packageName);
                 runOnUiThread(() -> Toast.makeText(ScriptEditorActivity.this, "未找到应用: " + packageName, Toast.LENGTH_SHORT).show());
             }
         } catch (Exception e) {
-            Log.e("ScriptEditor", "❌ 启动应用异常", e);
-            // 不抛出，避免中断脚本（由外层 catch 处理）
+            Log.e("ScriptEditor", "启动应用异常", e);
         }
     }
 
@@ -1080,7 +1127,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
     // ========== 以下为所有对话框和其他辅助方法 ==========
     // ========== 添加步骤对话框 ==========
     private void showAddStepDialog() {
-        String[] types = {"启动应用", "等待", "点击", "滑动", "返回键", "Home键", "文本输入", "长按", "文字识别点击", "📦 条件分支"};
+        String[] types = {"启动应用", "等待", "点击", "滑动", "返回键", "Home键", "文本输入", "长按", "文字识别点击", "条件分支"};
         new AlertDialog.Builder(this)
                 .setTitle("选择步骤类型")
                 .setItems(types, (dialog, which) -> {
@@ -1094,7 +1141,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
                         case 6: showTextInputDialog(); break;
                         case 7: showLongClickDialog(); break;
                         case 8: showImageClickDialog(); break;
-                        case 9: showIfStepDialog(); break;  // ✅ 新增
+                        case 9: showIfStepDialog(); break;
                     }
                 })
                 .show();
@@ -1149,14 +1196,14 @@ public class ScriptEditorActivity extends AppCompatActivity {
         layout.addView(inputDuration);
 
         Button btnCaptureTouch = new Button(this);
-        btnCaptureTouch.setText("📌 点击屏幕捕获");
+        btnCaptureTouch.setText("点击屏幕捕获");
         btnCaptureTouch.setOnClickListener(v -> {
             Intent intent = new Intent(ScriptEditorActivity.this, CoordinateCaptureActivity.class);
             startActivityForResult(intent, REQUEST_CAPTURE_LONG_CLICK);
         });
 
         Button btnCaptureFloating = new Button(this);
-        btnCaptureFloating.setText("📌 悬浮窗捕获");
+        btnCaptureFloating.setText("悬浮窗捕获");
         btnCaptureFloating.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1169,7 +1216,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         });
 
         Button btnCaptureFullScreen = new Button(this);
-        btnCaptureFullScreen.setText("📌 全屏捕获");
+        btnCaptureFullScreen.setText("全屏捕获");
         btnCaptureFullScreen.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1253,7 +1300,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
     // ========== 添加条件分支步骤 ==========
     private void showIfStepDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("📦 条件分支");
+        builder.setTitle("条件分支");
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -1286,7 +1333,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
             steps.add(step);
             adapter.notifyItemInserted(steps.size() - 1);
             markModified();
-            Toast.makeText(this, "✅ 条件分支已添加，点击可编辑子步骤", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "条件分支已添加，点击可编辑子步骤", Toast.LENGTH_LONG).show();
         });
 
         builder.setNegativeButton("取消", null);
@@ -1305,31 +1352,31 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 .setItems(types, (dialog, which) -> {
                     ScriptStep subStep = null;
                     switch (which) {
-                        case 0: // 启动应用
+                        case 0:
                             showAppPickerSubDialog(parentPosition, isThen);
                             return;
-                        case 1: // 等待
+                        case 1:
                             showWaitSubDialog(parentPosition, isThen);
                             return;
-                        case 2: // 点击
+                        case 2:
                             showClickSubDialog(parentPosition, isThen);
                             return;
-                        case 3: // 滑动
+                        case 3:
                             showSwipeSubDialog(parentPosition, isThen);
                             return;
-                        case 4: // 返回键
+                        case 4:
                             subStep = new ScriptStep(ScriptStep.TYPE_BACK);
                             break;
-                        case 5: // Home键
+                        case 5:
                             subStep = new ScriptStep(ScriptStep.TYPE_HOME);
                             break;
-                        case 6: // 文本输入
+                        case 6:
                             showTextInputSubDialog(parentPosition, isThen);
                             return;
-                        case 7: // 长按
+                        case 7:
                             showLongClickSubDialog(parentPosition, isThen);
                             return;
-                        case 8: // 文字识别点击
+                        case 8:
                             showImageClickSubDialog(parentPosition, isThen);
                             return;
                     }
@@ -1342,8 +1389,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 .show();
     }
 
-// ========== 子步骤的各种添加对话框（简化版，复用现有逻辑） ==========
-
+    // ========== 子步骤的各种添加对话框 ==========
     private void showWaitSubDialog(final int parentPosition, final boolean isThen) {
         final List<ScriptStep> targetList = isThen ? steps.get(parentPosition).thenSteps : steps.get(parentPosition).elseSteps;
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -1382,13 +1428,11 @@ public class ScriptEditorActivity extends AppCompatActivity {
         layout.addView(inputX);
         layout.addView(inputY);
 
-        // ✅ 关键：将局部变量赋值给类成员变量，让广播接收器能找到它们
         capturedClickX = inputX;
         capturedClickY = inputY;
 
-        // ========== 添加全屏捕获按钮 ==========
         Button btnCaptureFullScreen = new Button(this);
-        btnCaptureFullScreen.setText("📌 全屏捕获");
+        btnCaptureFullScreen.setText("全屏捕获");
         btnCaptureFullScreen.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1424,7 +1468,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
     private void showSwipeSubDialog(final int parentPosition, final boolean isThen) {
         final List<ScriptStep> targetList = isThen ? steps.get(parentPosition).thenSteps : steps.get(parentPosition).elseSteps;
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("滑动 (起点→终点)");
+        builder.setTitle("滑动 (起点->终点)");
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(50, 20, 50, 20);
@@ -1505,13 +1549,11 @@ public class ScriptEditorActivity extends AppCompatActivity {
         layout.addView(inputY);
         layout.addView(inputDuration);
 
-        // ✅ 关键：将局部变量赋值给类成员变量
         capturedClickX = inputX;
         capturedClickY = inputY;
 
-        // ========== 添加全屏捕获按钮 ==========
         Button btnCaptureFullScreen = new Button(this);
-        btnCaptureFullScreen.setText("📌 全屏捕获");
+        btnCaptureFullScreen.setText("全屏捕获");
         btnCaptureFullScreen.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1639,21 +1681,20 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ========== 编辑 IF 步骤（跳转到子编辑器） ==========
+    // ========== 编辑 IF 步骤 ==========
     private void editIfStep(int position) {
-        // 简单实现：用 AlertDialog 显示子步骤列表
         ScriptStep parent = steps.get(position);
         if (!parent.isConditionStep()) return;
 
         StringBuilder msg = new StringBuilder();
-        msg.append("🔍 条件文字: ").append(parent.conditionText).append("\n\n");
-        msg.append("✅ 条件成立时 (").append(parent.thenSteps != null ? parent.thenSteps.size() : 0).append("步):\n");
+        msg.append("条件文字: ").append(parent.conditionText).append("\n\n");
+        msg.append("条件成立时 (").append(parent.thenSteps != null ? parent.thenSteps.size() : 0).append("步):\n");
         if (parent.thenSteps != null) {
             for (int i = 0; i < parent.thenSteps.size(); i++) {
                 msg.append("  ").append(i + 1).append(". ").append(parent.thenSteps.get(i).getDescription()).append("\n");
             }
         }
-        msg.append("\n❌ 条件不成立时 (").append(parent.elseSteps != null ? parent.elseSteps.size() : 0).append("步):\n");
+        msg.append("\n条件不成立时 (").append(parent.elseSteps != null ? parent.elseSteps.size() : 0).append("步):\n");
         if (parent.elseSteps != null) {
             for (int i = 0; i < parent.elseSteps.size(); i++) {
                 msg.append("  ").append(i + 1).append(". ").append(parent.elseSteps.get(i).getDescription()).append("\n");
@@ -1661,7 +1702,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         }
 
         new AlertDialog.Builder(this)
-                .setTitle("📦 条件分支详情")
+                .setTitle("条件分支详情")
                 .setMessage(msg.toString())
                 .setPositiveButton("关闭", null)
                 .show();
@@ -1779,14 +1820,14 @@ public class ScriptEditorActivity extends AppCompatActivity {
         layout.setPadding(50, 20, 50, 20);
 
         Button btnCaptureTouch = new Button(this);
-        btnCaptureTouch.setText("📌 点击屏幕捕获");
+        btnCaptureTouch.setText("点击屏幕捕获");
         btnCaptureTouch.setOnClickListener(v -> {
             Intent intent = new Intent(ScriptEditorActivity.this, CoordinateCaptureActivity.class);
             startActivityForResult(intent, REQUEST_CAPTURE_CLICK);
         });
 
         Button btnCaptureFloating = new Button(this);
-        btnCaptureFloating.setText("📌 悬浮窗捕获");
+        btnCaptureFloating.setText("悬浮窗捕获");
         btnCaptureFloating.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1799,7 +1840,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         });
 
         Button btnCaptureFullScreen = new Button(this);
-        btnCaptureFullScreen.setText("📌 全屏捕获");
+        btnCaptureFullScreen.setText("全屏捕获");
         btnCaptureFullScreen.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1838,7 +1879,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
     private void showSwipeDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("滑动 (起点→终点)");
+        builder.setTitle("滑动 (起点->终点)");
 
         capturedSwipeX1 = new EditText(this);
         capturedSwipeX1.setHint("起点 X");
@@ -1854,7 +1895,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         layout.setPadding(50, 20, 50, 20);
 
         Button btnCaptureStart = new Button(this);
-        btnCaptureStart.setText("📌 捕获起点");
+        btnCaptureStart.setText("捕获起点");
         btnCaptureStart.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1867,7 +1908,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
         });
 
         Button btnCaptureEnd = new Button(this);
-        btnCaptureEnd.setText("📌 捕获终点");
+        btnCaptureEnd.setText("捕获终点");
         btnCaptureEnd.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "请先开启悬浮窗权限", Toast.LENGTH_LONG).show();
@@ -1929,7 +1970,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
                 scriptManager.deleteScript(scriptName);
             }
             scriptName = name;
-            setTitle("📜 " + scriptName);
+            setTitle(scriptName);
             saveScript();
             Toast.makeText(this, "已保存: " + scriptName, Toast.LENGTH_SHORT).show();
         });
@@ -1978,7 +2019,10 @@ public class ScriptEditorActivity extends AppCompatActivity {
                     .setTitle("删除脚本")
                     .setMessage("确定要删除脚本 \"" + selected + "\" 吗？")
                     .setPositiveButton("删除", (d, w) -> {
-                        scriptManager.deleteScript(selected);
+                        if (!scriptManager.deleteScript(selected)) {
+                            Toast.makeText(ScriptEditorActivity.this, "删除脚本失败", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
                         if (scriptName != null && scriptName.equals(selected)) {
                             steps.clear();
                             adapter.notifyDataSetChanged();
@@ -2009,7 +2053,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
             adapter.notifyDataSetChanged();
             scriptName = name;
             isModified = false;
-            setTitle("📜 " + scriptName);
+            setTitle(scriptName);
             Toast.makeText(this, "已加载: " + name, Toast.LENGTH_SHORT).show();
         } catch (IOException e) {
             Toast.makeText(this, "加载失败", Toast.LENGTH_SHORT).show();
@@ -2049,5 +2093,25 @@ public class ScriptEditorActivity extends AppCompatActivity {
         } else {
             finish();
         }
+    }
+    private Point getLineCenter(Text.Line line) {
+        if (line == null) return null;
+
+        // 方式1：尝试使用角点（通常是最准确的）
+        android.graphics.Point[] corners = line.getCornerPoints();
+        if (corners != null && corners.length >= 4) {
+            int centerX = (corners[0].x + corners[2].x) / 2;
+            int centerY = (corners[0].y + corners[2].y) / 2;
+            return new Point(centerX, centerY);
+        }
+
+        // 方式2：如果角点无效，使用边界矩形（getBoundingBox 是 ML Kit 提供的标准 API）
+        android.graphics.Rect bounds = line.getBoundingBox();
+        if (bounds != null && !bounds.isEmpty()) {
+            return new Point(bounds.centerX(), bounds.centerY());
+        }
+
+        // 方式3：如果都不行，返回 null
+        return null;
     }
 }

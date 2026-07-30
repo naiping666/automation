@@ -16,7 +16,7 @@ public class OCRHelper {
     private static final String TAG = "OCRHelper";
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    // 创建支持中文的识别器（也可换成英文）
+    // 创建支持中文的识别器
     private static final TextRecognizer recognizer =
             TextRecognition.getClient(
                     new ChineseTextRecognizerOptions.Builder().build()
@@ -40,7 +40,6 @@ public class OCRHelper {
                     String fullText = visionText.getText();
                     Log.d(TAG, "识别成功，共 " + visionText.getTextBlocks().size() + " 个文本块");
 
-                    // 可以获取更详细的信息
                     StringBuilder detail = new StringBuilder();
                     for (Text.TextBlock block : visionText.getTextBlocks()) {
                         for (Text.Line line : block.getLines()) {
@@ -69,7 +68,6 @@ public class OCRHelper {
             listener.onFailure(new IllegalArgumentException("Bitmap is null"));
             return;
         }
-        // 裁剪指定区域
         Bitmap cropped = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top);
         recognizeText(cropped, listener);
     }

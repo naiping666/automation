@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.os.Handler;
 import android.os.Looper;
@@ -100,12 +99,12 @@ public class ScriptExecutor {
                             MyAccessibilityService.performLongClick(step.x, step.y, step.longClickDuration);
                             Thread.sleep(200);
                             break;
-                        // ========== OCR 文字识别点击 ==========
+                        // 文字识别点击
                         case ScriptStep.TYPE_IMAGE_CLICK:
                             // 截图前等待 500ms，确保界面稳定
                             Thread.sleep(500);
 
-                            Log.d(TAG, "🔍 开始文字识别...");
+                            Log.d(TAG, "开始文字识别...");
 
                             // 获取目标文字
                             String targetText = step.ocrText;
@@ -114,16 +113,14 @@ public class ScriptExecutor {
                             }
                             Log.d(TAG, "目标文字: [" + targetText + "]");
 
-                            // ====== 截图（带重试） ======
+                            // 截图（带重试）
                             Bitmap screen = null;
                             boolean needReauthorize = false;
 
                             for (int retry = 0; retry < 5; retry++) {
-                                // 检查初始化状态
                                 if (!ScreenCaptureHelper.isInitialized()) {
                                     Log.w(TAG, "ScreenCaptureHelper 未初始化，尝试重新初始化...");
                                     ScreenCaptureHelper.cleanup();
-                                    // 通知上层重新授权
                                     if (callback != null) {
                                         mainHandler.post(callback::onNeedReauthorize);
                                     }
@@ -138,7 +135,6 @@ public class ScriptExecutor {
                                     }
                                 } catch (SecurityException e) {
                                     Log.e(TAG, "截图权限异常: " + e.getMessage());
-                                    // 权限失效，需要重新授权
                                     if (callback != null) {
                                         mainHandler.post(callback::onNeedReauthorize);
                                     }
@@ -157,22 +153,21 @@ public class ScriptExecutor {
                             }
 
                             if (screen == null) {
-                                Log.e(TAG, "❌ 截图失败");
-                                showToast(context, "❌ 截图失败");
+                                Log.e(TAG, "截图失败");
+                                showToast(context, "截图失败");
                                 throw new Exception("截图失败，请检查截图权限");
                             }
                             Log.d(TAG, "截图成功，尺寸: " + screen.getWidth() + "x" + screen.getHeight());
 
-                            // ====== OCR 识别并查找文字 ======
+                            // OCR 识别并查找文字
                             Point clickPoint = performOCRAndFindText(context, screen, targetText);
 
                             if (clickPoint == null) {
-                                Log.d(TAG, "⏳ 首次未找到文字，开始重试...");
+                                Log.d(TAG, "首次未找到文字，开始重试...");
                                 boolean found = false;
                                 for (int retry = 0; retry < 3; retry++) {
                                     Thread.sleep(step.timeoutMs / 3);
 
-                                    // 检查截图服务是否还活着
                                     if (!ScreenCaptureHelper.isInitialized()) {
                                         Log.w(TAG, "重试时截图服务已失效");
                                         if (callback != null) {
@@ -181,7 +176,6 @@ public class ScriptExecutor {
                                         throw new Exception("截图服务已失效，请重新授权");
                                     }
 
-                                    // 重新截图
                                     try {
                                         screen = ScreenCaptureHelper.captureScreen();
                                     } catch (Exception e) {
@@ -200,13 +194,13 @@ public class ScriptExecutor {
                                     }
                                 }
                                 if (!found) {
-                                    Log.e(TAG, "❌ 未找到文字: " + targetText);
-                                    showToast(context, "❌ 未找到文字: " + targetText);
+                                    Log.e(TAG, "未找到文字: " + targetText);
+                                    showToast(context, "未找到文字: " + targetText);
                                     throw new Exception("未找到文字: " + targetText);
                                 }
                             }
 
-                            Log.d(TAG, "✅ 找到文字！坐标: (" + (int) clickPoint.x + ", " + (int) clickPoint.y + ")");
+                            Log.d(TAG, "找到文字！坐标: (" + (int) clickPoint.x + ", " + (int) clickPoint.y + ")");
                             MyAccessibilityService.performClick((int) clickPoint.x, (int) clickPoint.y);
                             Thread.sleep(200);
                             break;
@@ -222,9 +216,8 @@ public class ScriptExecutor {
         }).start();
     }
 
-    // ========== OCR 辅助方法 ==========
+    // ---------- OCR 辅助方法 ----------
     private static Point performOCRAndFindText(Context context, Bitmap bitmap, String targetText) {
-        // 增加 null 检查
         if (bitmap == null) {
             Log.e(TAG, "performOCRAndFindText: bitmap 为 null");
             return null;
@@ -246,15 +239,15 @@ public class ScriptExecutor {
                     FileOutputStream fos = new FileOutputStream(file);
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
                     fos.close();
-                    Log.d(TAG, "📸 截图已保存: " + file.getAbsolutePath());
+                    Log.d(TAG, "截图已保存: " + file.getAbsolutePath());
                 }
             } catch (Exception e) {
                 Log.e(TAG, "保存截图失败", e);
             }
 
             CountDownLatch latch = new CountDownLatch(1);
-            final Point[] result = {null};
-            final Exception[] error = {null};
+            final Point[] result = {};
+            final Exception[] error = {};
 
             InputImage image = InputImage.fromBitmap(bitmap, 0);
 
@@ -277,7 +270,7 @@ public class ScriptExecutor {
                             }
                         }
                         if (lineCount == 0) {
-                            Log.d(TAG, "⚠️ OCR 未识别到任何文字");
+                            Log.d(TAG, "OCR 未识别到任何文字");
                         }
                         Log.d(TAG, allText.toString());
 
@@ -295,14 +288,14 @@ public class ScriptExecutor {
                                         int centerX = (corners[0].x + corners[2].x) / 2;
                                         int centerY = (corners[0].y + corners[2].y) / 2;
                                         result[0] = new Point(centerX, centerY);
-                                        Log.d(TAG, "✅ 找到目标文字! 坐标: (" + centerX + ", " + centerY + ")");
+                                        Log.d(TAG, "找到目标文字! 坐标: (" + centerX + ", " + centerY + ")");
                                         latch.countDown();
                                         return;
                                     }
                                 }
                             }
                         }
-                        Log.d(TAG, "❌ 未找到目标文字: [" + targetText + "]");
+                        Log.d(TAG, "未找到目标文字: [" + targetText + "]");
                         latch.countDown();
                     })
                     .addOnFailureListener(e -> {
